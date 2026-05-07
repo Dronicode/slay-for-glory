@@ -45,7 +45,7 @@ Copyright &copy; 2026 Dronico (Luffy O'Brien)
 #
 # Read more: https://zensical.org/docs/setup/navigation/
 nav = [
-  { "Game Overview" = "index.md" },
+  { "Home" = "index.md" },
   { "Components" = "rules/Components.md" },
   { "Card Types" = "rules/Card Types.md" },
   { "Setup" = "rules/Setup.md" },
