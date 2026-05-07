@@ -1,0 +1,48 @@
+name: Validate Site
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  docs-build:
+    name: Validate Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect whether site build is needed
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.sha }}"
+          CHANGED_FILES="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
+
+          # Build only when site content or config changed.
+          BUILD_NEEDED=false
+          if echo "$CHANGED_FILES" | grep -Eq '^(docs/|zensical\.toml$)'; then
+            BUILD_NEEDED=true
+          fi
+
+          echo "build_needed=$BUILD_NEEDED" >> "$GITHUB_OUTPUT"
+
+      - name: Skip build when docs/config are unchanged
+        if: steps.detect.outputs.build_needed != 'true'
+        run: echo "No docs or zensical config changes; skipping site build."
+
+      - uses: actions/setup-python@v6
+        if: steps.detect.outputs.build_needed == 'true'
+        with:
+          python-version: 3.x
+      - if: steps.detect.outputs.build_needed == 'true'
+        run: pip install zensical
+      - if: steps.detect.outputs.build_needed == 'true'
+        run: zensical build --clean

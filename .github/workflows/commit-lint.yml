@@ -1,0 +1,20 @@
+name: Commit Lint
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+jobs:
+  commitlint:
+    name: Lint Commits
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+      - run: npm install --save-dev @commitlint/cli @commitlint/config-conventional
+      # Lint the PR commit range.
+      - run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to HEAD
