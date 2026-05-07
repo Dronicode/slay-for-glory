@@ -47,7 +47,7 @@ jobs:
             fi
 
             # Automation files map to the ci scope.
-            if [[ "$file" == .github/* ]] || [[ "$file" == scripts/* ]] || [[ "$file" == .releaserc.*.cjs ]] || [[ "$file" == .commitlintrc.js ]]; then
+            if [[ "$file" == .github/* ]] || [[ "$file" == scripts/* ]] || [[ "$file" == .releaserc.*.cjs ]] || [[ "$file" == .commitlintrc.js ]] || [[ "$file" == .gitignore ]]; then
               has_ci_changes=true
               continue
             fi

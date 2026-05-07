@@ -13,5 +13,5 @@ wheels/
 site/
 
 # VSCode
-vscode/
+.vscode/
 *.code-workspace
