@@ -1,0 +1,111 @@
+name: Path Scope Validation
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+jobs:
+  validate:
+    name: Validate Paths
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Validate changed paths against commit scopes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.sha }}"
+
+          CHANGED_FILES="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
+          COMMIT_SUBJECTS="$(git log --format=%s "$BASE_SHA..$HEAD_SHA")"
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+          echo
+          echo "Commit subjects:"
+          echo "$COMMIT_SUBJECTS"
+          echo
+
+          has_content_changes=false
+          has_rules_changes=false
+          has_cards_changes=false
+          has_site_changes=false
+          has_ci_changes=false
+
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+
+            # Site infrastructure map to site scope.
+            if [[ "$file" == docs/assets/* ]] || [[ "$file" == docs/stylesheets/* ]] || [[ "$file" == docs/javascripts/* ]] || [[ "$file" == zensical.toml ]]; then
+              has_site_changes=true
+              continue
+            fi
+
+            # Automation files map to the ci scope.
+            if [[ "$file" == .github/* ]] || [[ "$file" == scripts/* ]] || [[ "$file" == .releaserc.*.cjs ]] || [[ "$file" == .commitlintrc.js ]]; then
+              has_ci_changes=true
+              continue
+            fi
+
+            # Cards files map to the cards scope.
+            if [[ "$file" == docs/cards/* ]]; then
+              has_cards_changes=true
+              continue
+            fi
+
+            # Rules files map to the rules scope.
+            if [[ "$file" == docs/rules/* ]]; then
+              has_rules_changes=true
+              continue
+            fi
+
+            # Other docs files map to content scope.
+            if [[ "$file" == docs/* ]]; then
+              has_content_changes=true
+              continue
+            fi
+
+          done <<< "$CHANGED_FILES"
+
+          content_scope_count=$(echo "$COMMIT_SUBJECTS" | grep -E -c '^[a-z]+\(content\)!?: ' || true)
+          rules_scope_count=$(echo "$COMMIT_SUBJECTS" | grep -E -c '^[a-z]+\(rules\)!?: ' || true)
+          cards_scope_count=$(echo "$COMMIT_SUBJECTS" | grep -E -c '^[a-z]+\(cards\)!?: ' || true)
+          site_scope_count=$(echo "$COMMIT_SUBJECTS" | grep -E -c '^[a-z]+\(site\)!?: ' || true)
+          ci_scope_count=$(echo "$COMMIT_SUBJECTS" | grep -E -c '^[a-z]+\(ci\)!?: ' || true)
+
+          errors=0
+
+          validate_scope() {
+            local changed="$1"
+            local count="$2"
+            local scope="$3"
+            local label="$4"
+
+            if [ "$changed" = true ] && [ "$count" -eq 0 ]; then
+              echo "ERROR: PR includes $label changes but has no commit with scope '($scope)'."
+              errors=1
+            fi
+
+            if [ "$changed" = false ] && [ "$count" -gt 0 ]; then
+              echo "ERROR: PR has '($scope)' scoped commit(s) but no $label file changes detected."
+              errors=1
+            fi
+          }
+
+          validate_scope "$has_content_changes" "$content_scope_count" "content" "content"
+          validate_scope "$has_rules_changes" "$rules_scope_count" "rules" "rules"
+          validate_scope "$has_cards_changes" "$cards_scope_count" "cards" "cards"
+          validate_scope "$has_site_changes" "$site_scope_count" "site" "site"
+          validate_scope "$has_ci_changes" "$ci_scope_count" "ci" "ci"
+
+          if [ "$errors" -ne 0 ]; then
+            echo "Path/scope validation failed."
+            exit 1
+          fi
+
+          echo "Path/scope validation passed."

@@ -1,0 +1,78 @@
+name: Auto PR (Develop → Main)
+
+on:
+  push:
+    branches:
+      - develop
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  create-pr:
+    name: Create Release PR
+    runs-on: ubuntu-latest
+    # Ignore pushes produced by any bot account.
+    if: ${{ !endsWith(github.actor, '[bot]') }}
+    steps:
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Create PR or ensure auto-merge is enabled
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # Retry while GitHub is still wiring checks onto a fresh PR.
+          enable_automerge() {
+            local pr_ref="$1"
+            local attempt
+            local output
+
+            for attempt in 1 2 3 4 5 6; do
+              output="$(gh pr merge "$pr_ref" --auto --merge 2>&1)" && {
+                echo "$output"
+                return 0
+              }
+
+              if echo "$output" | grep -qi "unstable status"; then
+                echo "Attempt $attempt: PR still unstable, retrying shortly..."
+                sleep 10
+                continue
+              fi
+
+              echo "$output"
+              echo "::error::Could not enable auto-merge with merge commits. Check allowed merge methods and branch protection settings."
+              return 1
+            done
+
+            echo "::error::Timed out waiting for PR to become stable for auto-merge."
+            return 1
+          }
+
+          EXISTING=$(gh pr list --base main --head develop --json number --jq '.[0].number')
+
+          if [ -n "$EXISTING" ]; then
+            echo "PR #$EXISTING already exists. Ensuring auto-merge is enabled."
+            enable_automerge "$EXISTING"
+          else
+            COMMIT_COUNT=$(gh api "repos/$GH_REPO/compare/main...develop" --jq '.total_commits')
+            if [ "$COMMIT_COUNT" = "1" ]; then
+              PR_TITLE="develop -> main (1 commit)"
+            else
+              PR_TITLE="develop -> main (${COMMIT_COUNT} commits)"
+            fi
+            PR_URL=$(gh pr create \
+              --base main \
+              --head develop \
+              --title "$PR_TITLE" \
+              --body "Automated PR from \`develop\`. Merges automatically when all required checks pass.")
+            echo "Created: $PR_URL"
+            enable_automerge "$PR_URL"
+          fi
