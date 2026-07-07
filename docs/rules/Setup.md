@@ -31,6 +31,7 @@
 - Place the three Artifact piles to the side.
 - For each floor, take a number of Roaming Boss Monster cards equal to player count minus one and mix them into that floor's Dungeon deck.
 - For the final floor, take Boss Monster cards equal to player count minus one at random.
+- Take the top 2 cards of the first Boss Monster deck (or 3 cards in a 5 player game) and shuffle the Dungeon Door card among them. Put another Boss Monster on top and place these back on top of the Boss Monster Deck face down.
 - Set aside the remaining Roaming Boss Monsters and final floor Boss Monsters without revealing them. They will not be used.
 - For each floor, place the floor's Dungeon deck face down, with the floor's Boss Monster deck beside it, also face down.
 - Reveal the top 5 cards of the floor 1 Dungeon deck and place them in a row beside the Boss Monster deck, face up.
