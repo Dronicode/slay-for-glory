@@ -34,6 +34,7 @@
 - Take the top 2 cards of the first Boss Monster deck (or 3 cards in a 5 player game) and shuffle the Dungeon Door card among them. Put another Boss Monster on top and place these back on top of the Boss Monster Deck face down.
 - Set aside the remaining Roaming Boss Monsters and final floor Boss Monsters without revealing them. They will not be used.
 - For each floor, place the floor's Dungeon deck face down, with the floor's Boss Monster deck beside it, also face down.
+- Search the floor 1 Dungeon deck for an amount of F-rank cards equal to (player count \*2). Suffle the rest of the deck, then put those cards, shuffled, on top.
 - Reveal the top 5 cards of the floor 1 Dungeon deck and place them in a row beside the Boss Monster deck, face up.
 - Reveal the first floor 1 Boss Monster and equip it with a tier 1 Artifact.
 - Do not reveal the floor lineup or the Boss Monster for the other floors at this time.
