@@ -25,16 +25,20 @@ function makeCommitsSort(scopeOrder) {
 
 function makeTrackTransform(scopeOrder, typeToSection = sectionByType) {
   return (commit) => {
-    if (!scopeOrder.includes(commit.scope)) {
+    const scope = typeof commit.scope === "string" ? commit.scope.trim() : "";
+    if (!scopeOrder.includes(scope)) {
       return undefined;
     }
 
-    const section = typeToSection[commit.type];
+    const commitType = String(commit.type || "").toLowerCase();
+    const section = typeToSection[commitType];
     if (!section) {
       return undefined;
     }
 
     const result = {
+      ...commit,
+      scope,
       type: section,
       shortHash: typeof commit.hash === "string" ? commit.hash.substring(0, 7) : commit.shortHash,
     };
