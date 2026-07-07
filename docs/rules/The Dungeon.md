@@ -24,7 +24,7 @@ The greatest achievement a party of adventurers can hope for is to slay a Floor 
 
 - Trophy tokens equal to the amount specified on the monster card. These tokens are worth a significant amount of glory at the end of the game.
 - The Artifact the monster was holding.
-- Access to the next Dungeon floor. The player may Travel to the next floor on their following turn. This access is temporary. If they do not Travel there on the following turn, they will have to defeat a Boss Monster again to regain access.
+- Passage to deeper dungeon floors is blocked until the Passageway Card is found. When a Boss monster is slain and the next card is revealed, if it is the Passageway card this means the way to the next floor has been found. Set it aside and reveal the next Boss Monster card. This means that players may now travel to the next Dungeon floor. When a player travels to the next dungeon floor for the first time, if it is not the final floor mix the Passageway card into the Monster card pile for that floor before revealing the first Boss Monster.
 
 ### On the Final Floor
 

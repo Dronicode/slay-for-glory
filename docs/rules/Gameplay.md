@@ -51,7 +51,7 @@ Return to any previous floor of the Dungeon, for example from floor 3 to floor 1
 
 #### Delve Deeper
 
-Descend to the next floor of the dungeon. Players can only gain access to deeper floors by slaying the Floor Bosses. When a party slays the Floor Boss of the floor they are on, then on the next turn they may choose to delve deeper.
+Descend to the next floor of the dungeon. Players can only gain access to deeper floors by slaying the Floor Bosses. If the passage card has been found, then a party may choose to delve deeper if they slew the boss of their current floor on the previous turn.
 
 After leaving a deeper floor, the party must slay the Floor Boss again to return. Floors cannot be skipped, even if the player has been there before.
 
