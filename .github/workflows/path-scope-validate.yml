@@ -2,18 +2,24 @@ name: Path Scope Validation
 
 on:
   pull_request:
-    types: [opened, edited, reopened, synchronize]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
 
 jobs:
   validate:
-    name: Validate Paths
+    name: Report Paths and Scopes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Validate changed paths against commit scopes
+      - name: Analyze changed paths and commit scopes
+        id: analyze
         shell: bash
         run: |
           set -euo pipefail
@@ -78,34 +84,145 @@ jobs:
           site_scope_count=$(echo "$COMMIT_SUBJECTS" | grep -E -c '^[a-z]+\(site\)!?: ' || true)
           ci_scope_count=$(echo "$COMMIT_SUBJECTS" | grep -E -c '^[a-z]+\(ci\)!?: ' || true)
 
-          errors=0
+          content_release_count=$(echo "$COMMIT_SUBJECTS" | grep -E -c '^(feat|fix)\((content|rules|cards)\)!?: ' || true)
+          infra_release_count=$(echo "$COMMIT_SUBJECTS" | grep -E -c '^(feat|fix)\((ci|site)\)!?: ' || true)
 
-          validate_scope() {
-            local changed="$1"
-            local count="$2"
-            local scope="$3"
-            local label="$4"
-
-            if [ "$changed" = true ] && [ "$count" -eq 0 ]; then
-              echo "ERROR: PR includes $label changes but has no commit with scope '($scope)'."
-              errors=1
-            fi
-
-            if [ "$changed" = false ] && [ "$count" -gt 0 ]; then
-              echo "ERROR: PR has '($scope)' scoped commit(s) but no $label file changes detected."
-              errors=1
-            fi
-          }
-
-          validate_scope "$has_content_changes" "$content_scope_count" "content" "content"
-          validate_scope "$has_rules_changes" "$rules_scope_count" "rules" "rules"
-          validate_scope "$has_cards_changes" "$cards_scope_count" "cards" "cards"
-          validate_scope "$has_site_changes" "$site_scope_count" "site" "site"
-          validate_scope "$has_ci_changes" "$ci_scope_count" "ci" "ci"
-
-          if [ "$errors" -ne 0 ]; then
-            echo "Path/scope validation failed."
-            exit 1
+          content_release_eligible=false
+          infra_release_eligible=false
+          if [ "$content_release_count" -gt 0 ]; then
+            content_release_eligible=true
+          fi
+          if [ "$infra_release_count" -gt 0 ]; then
+            infra_release_eligible=true
           fi
 
-          echo "Path/scope validation passed."
+          mismatch_count=0
+          mismatch_lines=""
+
+          add_mismatch() {
+            local message="$1"
+            mismatch_count=$((mismatch_count + 1))
+            mismatch_lines+="- ${message}"$'\n'
+          }
+
+          if [ "$has_content_changes" = true ] && [ "$content_scope_count" -eq 0 ]; then
+            add_mismatch "Content docs changed but no commits used (content) scope."
+          fi
+          if [ "$has_rules_changes" = true ] && [ "$rules_scope_count" -eq 0 ]; then
+            add_mismatch "Rules docs changed but no commits used (rules) scope."
+          fi
+          if [ "$has_cards_changes" = true ] && [ "$cards_scope_count" -eq 0 ]; then
+            add_mismatch "Cards docs changed but no commits used (cards) scope."
+          fi
+          if [ "$has_site_changes" = true ] && [ "$site_scope_count" -eq 0 ]; then
+            add_mismatch "Site files changed but no commits used (site) scope."
+          fi
+          if [ "$has_ci_changes" = true ] && [ "$ci_scope_count" -eq 0 ]; then
+            add_mismatch "Automation files changed but no commits used (ci) scope."
+          fi
+
+          if [ "$has_content_changes" = false ] && [ "$content_scope_count" -gt 0 ]; then
+            add_mismatch "Found (content) commits but no content docs files changed."
+          fi
+          if [ "$has_rules_changes" = false ] && [ "$rules_scope_count" -gt 0 ]; then
+            add_mismatch "Found (rules) commits but no rules docs files changed."
+          fi
+          if [ "$has_cards_changes" = false ] && [ "$cards_scope_count" -gt 0 ]; then
+            add_mismatch "Found (cards) commits but no cards docs files changed."
+          fi
+          if [ "$has_site_changes" = false ] && [ "$site_scope_count" -gt 0 ]; then
+            add_mismatch "Found (site) commits but no site files changed."
+          fi
+          if [ "$has_ci_changes" = false ] && [ "$ci_scope_count" -gt 0 ]; then
+            add_mismatch "Found (ci) commits but no automation files changed."
+          fi
+
+          total_commit_count=$(echo "$COMMIT_SUBJECTS" | sed '/^\s*$/d' | wc -l | tr -d ' ')
+          scoped_commit_count=$(echo "$COMMIT_SUBJECTS" | grep -E -c '^[a-z]+\([^)]+\)!?: ' || true)
+          unscoped_commit_count=$((total_commit_count - scoped_commit_count))
+
+          if [ "$mismatch_count" -eq 0 ]; then
+            mismatch_block="None detected."
+          else
+            mismatch_block="$mismatch_lines"
+          fi
+
+          if [ "$content_release_eligible" = true ]; then
+            content_status="Yes"
+          else
+            content_status="No"
+          fi
+
+          if [ "$infra_release_eligible" = true ]; then
+            infra_status="Yes"
+          else
+            infra_status="No"
+          fi
+
+          summary_file="$(mktemp)"
+          {
+            echo "<!-- path-scope-advisory-comment -->"
+            echo "## Advisory Release Check"
+            echo
+            echo "- Content release eligible: **${content_status}**"
+            echo "- Infra release eligible: **${infra_status}**"
+            echo "- Unscoped commits in this PR: **${unscoped_commit_count}**"
+            echo
+            echo "### Advisory Path/Scope Mismatches"
+            echo "$mismatch_block"
+            echo
+            echo "This check is informational only and does not block automerge."
+          } > "$summary_file"
+
+          {
+            echo "content_release_eligible=$content_release_eligible"
+            echo "infra_release_eligible=$infra_release_eligible"
+            echo "unscoped_commit_count=$unscoped_commit_count"
+            echo "summary<<EOF"
+            cat "$summary_file"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          cat "$summary_file" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "Path/scope validation is advisory only."
+          echo "This check reports mismatches but does not block the PR."
+
+      - name: Upsert advisory PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = "<!-- path-scope-advisory-comment -->";
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = context.issue.number;
+            const body = `${{ toJSON(steps.analyze.outputs.summary) }}`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            const existing = comments.find(
+              (comment) => comment.user?.type === "Bot" && comment.body?.includes(marker)
+            );
+
+            if (existing) {
+              if (existing.body !== body) {
+                await github.rest.issues.updateComment({
+                  owner,
+                  repo,
+                  comment_id: existing.id,
+                  body,
+                });
+              }
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+            }

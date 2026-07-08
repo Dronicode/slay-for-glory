@@ -20,7 +20,24 @@ def normalize_header(path: Path, header: str) -> None:
     text = path.read_text(encoding="utf-8")
     lines = text.splitlines()
 
-    filtered = [line for line in lines if line.strip() != header]
+    filtered = []
+    header_written = False
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("# ") and not header_written:
+            filtered.append(header)
+            header_written = True
+            continue
+
+        if stripped == header:
+            continue
+
+        filtered.append(line)
+
+    if not header_written:
+        filtered.insert(0, header)
+
     body = "\n".join(filtered).strip()
 
     if body:
