@@ -11,12 +11,19 @@ permissions:
 
 jobs:
   validate:
-    name: Report Paths and Scopes
+    name: Validate Paths
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       - name: Analyze changed paths and commit scopes
         id: analyze
@@ -28,7 +35,7 @@ jobs:
           HEAD_SHA="${{ github.sha }}"
 
           CHANGED_FILES="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
-          COMMIT_SUBJECTS="$(git log --format=%s "$BASE_SHA..$HEAD_SHA")"
+          COMMIT_SUBJECTS="$(git log --no-merges --format=%s "$BASE_SHA..$HEAD_SHA")"
 
           echo "Changed files:"
           echo "$CHANGED_FILES"
@@ -78,14 +85,14 @@ jobs:
 
           done <<< "$CHANGED_FILES"
 
-          content_scope_count=$(echo "$COMMIT_SUBJECTS" | grep -E -c '^[a-z]+\(content\)!?: ' || true)
-          rules_scope_count=$(echo "$COMMIT_SUBJECTS" | grep -E -c '^[a-z]+\(rules\)!?: ' || true)
-          cards_scope_count=$(echo "$COMMIT_SUBJECTS" | grep -E -c '^[a-z]+\(cards\)!?: ' || true)
-          site_scope_count=$(echo "$COMMIT_SUBJECTS" | grep -E -c '^[a-z]+\(site\)!?: ' || true)
-          ci_scope_count=$(echo "$COMMIT_SUBJECTS" | grep -E -c '^[a-z]+\(ci\)!?: ' || true)
+          content_scope_count=$(echo "$COMMIT_SUBJECTS" | grep -Ei -c '^[a-z]+\(content\)!?: ' || true)
+          rules_scope_count=$(echo "$COMMIT_SUBJECTS" | grep -Ei -c '^[a-z]+\(rules\)!?: ' || true)
+          cards_scope_count=$(echo "$COMMIT_SUBJECTS" | grep -Ei -c '^[a-z]+\(cards\)!?: ' || true)
+          site_scope_count=$(echo "$COMMIT_SUBJECTS" | grep -Ei -c '^[a-z]+\(site\)!?: ' || true)
+          ci_scope_count=$(echo "$COMMIT_SUBJECTS" | grep -Ei -c '^[a-z]+\(ci\)!?: ' || true)
 
-          content_release_count=$(echo "$COMMIT_SUBJECTS" | grep -E -c '^(feat|fix)\((content|rules|cards)\)!?: ' || true)
-          infra_release_count=$(echo "$COMMIT_SUBJECTS" | grep -E -c '^(feat|fix)\((ci|site)\)!?: ' || true)
+          content_release_count=$(echo "$COMMIT_SUBJECTS" | grep -Ei -c '^(feat|fix)\((content|rules|cards)\)!?: ' || true)
+          infra_release_count=$(echo "$COMMIT_SUBJECTS" | grep -Ei -c '^(feat|fix)\((ci|site)\)!?: ' || true)
 
           content_release_eligible=false
           infra_release_eligible=false
@@ -138,7 +145,7 @@ jobs:
           fi
 
           total_commit_count=$(echo "$COMMIT_SUBJECTS" | sed '/^\s*$/d' | wc -l | tr -d ' ')
-          scoped_commit_count=$(echo "$COMMIT_SUBJECTS" | grep -E -c '^[a-z]+\([^)]+\)!?: ' || true)
+          scoped_commit_count=$(echo "$COMMIT_SUBJECTS" | grep -Ei -c '^[a-z]+\([^)]+\)!?: ' || true)
           unscoped_commit_count=$((total_commit_count - scoped_commit_count))
 
           if [ "$mismatch_count" -eq 0 ]; then
@@ -191,12 +198,13 @@ jobs:
       - name: Upsert advisory PR comment
         uses: actions/github-script@v7
         with:
+          github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const marker = "<!-- path-scope-advisory-comment -->";
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const issue_number = context.issue.number;
-            const body = `${{ toJSON(steps.analyze.outputs.summary) }}`;
+            const body = process.env.ADVISORY_BODY;
 
             const { data: comments } = await github.rest.issues.listComments({
               owner,
@@ -226,3 +234,5 @@ jobs:
                 body,
               });
             }
+        env:
+          ADVISORY_BODY: ${{ steps.analyze.outputs.summary }}
