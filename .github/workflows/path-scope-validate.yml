@@ -108,6 +108,7 @@ jobs:
 
           mismatch_count=0
           mismatch_lines=""
+          mismatch_recommendation_lines=""
 
           commit_scope_checked_total=0
           commit_scope_good=0
@@ -119,6 +120,11 @@ jobs:
             local message="$1"
             mismatch_count=$((mismatch_count + 1))
             mismatch_lines+="- ${message}"$'\n'
+          }
+
+          add_mismatch_recommendation() {
+            local message="$1"
+            mismatch_recommendation_lines+="- ${message}"$'\n'
           }
 
           add_commit_scope_bad() {
@@ -154,20 +160,44 @@ jobs:
             esac
           }
 
+          add_recommendations_for_missing_scope() {
+            local scope="$1"
+            local found=false
+
+            while IFS= read -r file; do
+              [ -z "$file" ] && continue
+
+              expected_scope="$(expected_scope_for_file "$file")"
+              if [ "$expected_scope" = "$scope" ]; then
+                add_mismatch_recommendation "Changes in path ${file} should use scope (${scope})."
+                found=true
+              fi
+            done <<< "$CHANGED_FILES"
+
+            if [ "$found" = false ]; then
+              add_mismatch_recommendation "Changes for scope (${scope}) should use matching paths for that scope."
+            fi
+          }
+
           if [ "$has_content_changes" = true ] && [ "$content_scope_count" -eq 0 ]; then
             add_mismatch "Content docs changed but no commits used (content) scope."
+            add_recommendations_for_missing_scope "content"
           fi
           if [ "$has_rules_changes" = true ] && [ "$rules_scope_count" -eq 0 ]; then
             add_mismatch "Rules docs changed but no commits used (rules) scope."
+            add_recommendations_for_missing_scope "rules"
           fi
           if [ "$has_cards_changes" = true ] && [ "$cards_scope_count" -eq 0 ]; then
             add_mismatch "Cards docs changed but no commits used (cards) scope."
+            add_recommendations_for_missing_scope "cards"
           fi
           if [ "$has_site_changes" = true ] && [ "$site_scope_count" -eq 0 ]; then
             add_mismatch "Site files changed but no commits used (site) scope."
+            add_recommendations_for_missing_scope "site"
           fi
           if [ "$has_ci_changes" = true ] && [ "$ci_scope_count" -eq 0 ]; then
             add_mismatch "Automation files changed but no commits used (ci) scope."
+            add_recommendations_for_missing_scope "ci"
           fi
 
           if [ "$has_content_changes" = false ] && [ "$content_scope_count" -gt 0 ]; then
@@ -248,7 +278,16 @@ jobs:
               merged_mismatch_lines="- None."
             fi
 
-            recommendation_lines="$commit_scope_recommendation_lines"
+            recommendation_lines=""
+            if [ -n "$commit_scope_recommendation_lines" ]; then
+              recommendation_lines+="$commit_scope_recommendation_lines"
+            fi
+            if [ -n "$mismatch_recommendation_lines" ]; then
+              recommendation_lines+="$mismatch_recommendation_lines"
+            fi
+            if [ -z "$recommendation_lines" ]; then
+              recommendation_lines="- None."
+            fi
 
             detail_mismatch_section=$'\n### Path/Scope Mismatches\n'
             detail_mismatch_section+="$merged_mismatch_lines"

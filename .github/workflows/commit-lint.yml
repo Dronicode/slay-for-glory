@@ -63,7 +63,7 @@ jobs:
             show_detail_sections=true
           fi
 
-          recommendation_block="- Correct format: type(scope):\n- Release-trigger types: feat, fix.\n- Non-release types: chore, refactor, test.\n- Release-trigger scopes: content, rules, cards, ci, site.\n- Non-release scopes: any scope outside release-trigger scopes, or unscoped."
+          recommendation_block="- Correct format: type(scope):\n- Release-trigger types: feat, fix.\n- Non-release types: chore, refactor, test.\n- Release-trigger scopes: content, rules, cards, ci, site.\n- Non-release scopes: any scope outside release-trigger scopes."
 
           summary_file="$(mktemp)"
           {
