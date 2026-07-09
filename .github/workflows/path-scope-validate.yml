@@ -290,8 +290,9 @@ jobs:
             echo "- Content release commits in this PR: **${content_release_count}**"
             echo "- Infra release commits in this PR: **${infra_release_count}**"
             echo "- Unscoped commits in this PR: **${unscoped_commit_count}**"
-            echo "- [checkmark] Scope/path matches: **${commit_scope_good}/${commit_scope_checked_total}**"
-            echo "- [cross] Scope/path mismatches: **${commit_scope_bad}/${commit_scope_checked_total}**"
+            echo
+            echo "- ✅ Scope/path matches: **${commit_scope_good}/${commit_scope_checked_total}**"
+            echo "- ❌ Scope/path mismatches: **${commit_scope_bad}/${commit_scope_checked_total}**"
             echo
             echo "$commit_scope_status"
             printf '%b\n' "$detail_mismatch_section"

@@ -70,8 +70,8 @@ jobs:
             echo "<!-- commit-lint-advisory-comment -->"
             echo "## Report Commit Conventions"
             echo
-            echo "- [checkmark] Conventional syntax matches: **${valid_count}/${total_count}**"
-            echo "- [cross] Conventional syntax mismatches: **${invalid_count}/${total_count}**"
+            echo "- ✅ Conventional syntax matches: **${valid_count}/${total_count}**"
+            echo "- ❌ Conventional syntax mismatches: **${invalid_count}/${total_count}**"
             echo
             echo "$status_line"
             echo
