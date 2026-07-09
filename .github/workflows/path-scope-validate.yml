@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   validate:
-    name: Validate Paths
+    name: Report Paths and Scopes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -91,6 +91,9 @@ jobs:
           site_scope_count=$(echo "$COMMIT_SUBJECTS" | grep -Ei -c '^[a-z]+\(site\)!?: ' || true)
           ci_scope_count=$(echo "$COMMIT_SUBJECTS" | grep -Ei -c '^[a-z]+\(ci\)!?: ' || true)
 
+          content_scoped_commit_count=$((content_scope_count + rules_scope_count + cards_scope_count))
+          infra_scoped_commit_count=$((site_scope_count + ci_scope_count))
+
           content_release_count=$(echo "$COMMIT_SUBJECTS" | grep -Ei -c '^(feat|fix)\((content|rules|cards)\)!?: ' || true)
           infra_release_count=$(echo "$COMMIT_SUBJECTS" | grep -Ei -c '^(feat|fix)\((ci|site)\)!?: ' || true)
 
@@ -106,10 +109,21 @@ jobs:
           mismatch_count=0
           mismatch_lines=""
 
+          commit_scope_checked_total=0
+          commit_scope_good=0
+          commit_scope_bad=0
+          commit_scope_bad_lines=""
+
           add_mismatch() {
             local message="$1"
             mismatch_count=$((mismatch_count + 1))
             mismatch_lines+="- ${message}"$'\n'
+          }
+
+          add_commit_scope_bad() {
+            local message="$1"
+            commit_scope_bad=$((commit_scope_bad + 1))
+            commit_scope_bad_lines+="- ${message}"$'\n'
           }
 
           if [ "$has_content_changes" = true ] && [ "$content_scope_count" -eq 0 ]; then
@@ -144,6 +158,81 @@ jobs:
             add_mismatch "Found (ci) commits but no automation files changed."
           fi
 
+          append_expected_scope() {
+            local scope="$1"
+            case ",$expected_scopes_csv," in
+              *",${scope},"*) ;;
+              *)
+                if [ -z "$expected_scopes_csv" ]; then
+                  expected_scopes_csv="$scope"
+                else
+                  expected_scopes_csv="${expected_scopes_csv},${scope}"
+                fi
+                ;;
+            esac
+          }
+
+          COMMIT_SHAS="$(git log --no-merges --format=%H "$BASE_SHA..$HEAD_SHA")"
+
+          while IFS= read -r commit_sha; do
+            [ -z "$commit_sha" ] && continue
+
+            commit_subject="$(git log -1 --format=%s "$commit_sha")"
+            commit_scope="$(echo "$commit_subject" | sed -nE 's/^[a-zA-Z]+\(([^)]+)\)!?: .*/\1/p' | tr '[:upper:]' '[:lower:]')"
+
+            # Only score scope/path matching for scoped commits.
+            [ -z "$commit_scope" ] && continue
+
+            commit_scope_checked_total=$((commit_scope_checked_total + 1))
+            expected_scopes_csv=""
+
+            commit_files="$(git diff-tree --no-commit-id --name-only -r "$commit_sha")"
+
+            while IFS= read -r file; do
+              [ -z "$file" ] && continue
+
+              if [[ "$file" == docs/assets/* ]] || [[ "$file" == docs/stylesheets/* ]] || [[ "$file" == docs/javascripts/* ]] || [[ "$file" == zensical.toml ]]; then
+                append_expected_scope "site"
+                continue
+              fi
+
+              if [[ "$file" == .github/* ]] || [[ "$file" == scripts/* ]] || [[ "$file" == .releaserc.*.cjs ]] || [[ "$file" == .commitlintrc.js ]] || [[ "$file" == .gitignore ]]; then
+                append_expected_scope "ci"
+                continue
+              fi
+
+              if [[ "$file" == docs/cards/* ]]; then
+                append_expected_scope "cards"
+                continue
+              fi
+
+              if [[ "$file" == docs/rules/* ]]; then
+                append_expected_scope "rules"
+                continue
+              fi
+
+              if [[ "$file" == docs/* ]]; then
+                append_expected_scope "content"
+                continue
+              fi
+
+            done <<< "$commit_files"
+
+            if [ -z "$expected_scopes_csv" ]; then
+              add_commit_scope_bad "${commit_subject} -> used (${commit_scope}); recommendation: unscoped or non-release scope for these paths."
+              continue
+            fi
+
+            case ",$expected_scopes_csv," in
+              *",${commit_scope},"*)
+                commit_scope_good=$((commit_scope_good + 1))
+                ;;
+              *)
+                add_commit_scope_bad "${commit_subject} -> used (${commit_scope}); recommendation: (${expected_scopes_csv})."
+                ;;
+            esac
+          done <<< "$COMMIT_SHAS"
+
           total_commit_count=$(echo "$COMMIT_SUBJECTS" | sed '/^\s*$/d' | wc -l | tr -d ' ')
           scoped_commit_count=$(echo "$COMMIT_SUBJECTS" | grep -Ei -c '^[a-z]+\([^)]+\)!?: ' || true)
           unscoped_commit_count=$((total_commit_count - scoped_commit_count))
@@ -152,6 +241,14 @@ jobs:
             mismatch_block="None detected."
           else
             mismatch_block="$mismatch_lines"
+          fi
+
+          if [ "$commit_scope_bad" -eq 0 ]; then
+            commit_scope_status="All scoped commits match expected path scopes."
+            commit_scope_bad_block="None."
+          else
+            commit_scope_status="Some scoped commits do not match expected path scopes."
+            commit_scope_bad_block="$commit_scope_bad_lines"
           fi
 
           if [ "$content_release_eligible" = true ]; then
@@ -173,7 +270,16 @@ jobs:
             echo
             echo "- Content release eligible: **${content_status}**"
             echo "- Infra release eligible: **${infra_status}**"
+            echo "- Content scoped commits in this PR: **${content_scoped_commit_count}**"
+            echo "- Infra scoped commits in this PR: **${infra_scoped_commit_count}**"
             echo "- Unscoped commits in this PR: **${unscoped_commit_count}**"
+            echo "- [OK] Good scope/path matches: **${commit_scope_good}/${commit_scope_checked_total}**"
+            echo "- [X] Scope/path mismatches: **${commit_scope_bad}/${commit_scope_checked_total}**"
+            echo
+            echo "$commit_scope_status"
+            echo
+            echo "### Scoped Commit Path/Scope Recommendations"
+            echo "$commit_scope_bad_block"
             echo
             echo "### Advisory Path/Scope Mismatches"
             echo "$mismatch_block"
@@ -184,7 +290,12 @@ jobs:
           {
             echo "content_release_eligible=$content_release_eligible"
             echo "infra_release_eligible=$infra_release_eligible"
+            echo "content_scoped_commit_count=$content_scoped_commit_count"
+            echo "infra_scoped_commit_count=$infra_scoped_commit_count"
             echo "unscoped_commit_count=$unscoped_commit_count"
+            echo "commit_scope_good=$commit_scope_good"
+            echo "commit_scope_bad=$commit_scope_bad"
+            echo "commit_scope_checked_total=$commit_scope_checked_total"
             echo "summary<<EOF"
             cat "$summary_file"
             echo "EOF"

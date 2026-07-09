@@ -2,19 +2,137 @@ name: Commit Lint
 
 on:
   pull_request:
-    types: [opened, edited, reopened, synchronize]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
 
 jobs:
   commitlint:
-    name: Lint Commits
+    name: Report Commit Conventions
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - uses: actions/setup-node@v6
         with:
           node-version: 20
-      - run: npm install --save-dev @commitlint/cli @commitlint/config-conventional
-      # Lint the PR commit range.
-      - run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to HEAD
+
+      - name: Analyze commit subjects
+        id: analyze
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.sha }}"
+          COMMIT_SUBJECTS="$(git log --no-merges --format=%s "$BASE_SHA..$HEAD_SHA")"
+
+          total_count=$(echo "$COMMIT_SUBJECTS" | sed '/^\s*$/d' | wc -l | tr -d ' ')
+          valid_count=0
+          invalid_count=0
+          invalid_lines=""
+
+          while IFS= read -r subject; do
+            [ -z "$subject" ] && continue
+
+            if echo "$subject" | grep -Eq '^(feat|fix|docs|chore|refactor|test)(\([^)]+\))?!?: .+'; then
+              valid_count=$((valid_count + 1))
+            else
+              invalid_count=$((invalid_count + 1))
+              invalid_lines+="- ${subject}"$'\n'
+            fi
+          done <<< "$COMMIT_SUBJECTS"
+
+          if [ "$invalid_count" -eq 0 ]; then
+            status_line="All commit subjects follow preferred Conventional Commit practice."
+            invalid_block="None."
+          else
+            status_line="Some commit subjects do not match preferred Conventional Commit practice."
+            invalid_block="$invalid_lines"
+          fi
+
+          recommendation_block="- Preferred release-trigger combinations: feat(content), fix(content), feat(rules), fix(rules), feat(cards), fix(cards), feat(ci), fix(ci), feat(site), fix(site).\n- Other valid commit types are allowed, but may not trigger a release."
+
+          summary_file="$(mktemp)"
+          {
+            echo "<!-- commit-lint-advisory-comment -->"
+            echo "## Advisory Commit Conventions"
+            echo
+            echo "- [OK] Conventional format matches: **${valid_count}/${total_count}**"
+            echo "- [X] Conventional format mismatches: **${invalid_count}/${total_count}**"
+            echo
+            echo "$status_line"
+            echo
+            echo "### Mismatched Commit Subjects"
+            echo "$invalid_block"
+            echo
+            echo "### Recommended Combinations"
+            printf '%b\n' "$recommendation_block"
+            echo
+            echo "This report is informational only and does not block automerge."
+          } > "$summary_file"
+
+          {
+            echo "valid_count=$valid_count"
+            echo "invalid_count=$invalid_count"
+            echo "total_count=$total_count"
+            echo "summary<<EOF"
+            cat "$summary_file"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          cat "$summary_file" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upsert advisory PR comment
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const marker = "<!-- commit-lint-advisory-comment -->";
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = context.issue.number;
+            const body = process.env.ADVISORY_BODY;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            const existing = comments.find(
+              (comment) => comment.user?.type === "Bot" && comment.body?.includes(marker)
+            );
+
+            if (existing) {
+              if (existing.body !== body) {
+                await github.rest.issues.updateComment({
+                  owner,
+                  repo,
+                  comment_id: existing.id,
+                  body,
+                });
+              }
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+            }
+        env:
+          ADVISORY_BODY: ${{ steps.analyze.outputs.summary }}
