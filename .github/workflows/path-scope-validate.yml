@@ -112,7 +112,8 @@ jobs:
           commit_scope_checked_total=0
           commit_scope_good=0
           commit_scope_bad=0
-          commit_scope_bad_lines=""
+          commit_scope_mismatch_lines=""
+          commit_scope_recommendation_lines=""
 
           add_mismatch() {
             local message="$1"
@@ -121,9 +122,11 @@ jobs:
           }
 
           add_commit_scope_bad() {
-            local message="$1"
+            local mismatch_message="$1"
+            local recommendation_message="$2"
             commit_scope_bad=$((commit_scope_bad + 1))
-            commit_scope_bad_lines+="- ${message}"$'\n'
+            commit_scope_mismatch_lines+="- ${mismatch_message}"$'\n'
+            commit_scope_recommendation_lines+="- ${recommendation_message}"$'\n'
           }
 
           if [ "$has_content_changes" = true ] && [ "$content_scope_count" -eq 0 ]; then
@@ -219,7 +222,9 @@ jobs:
             done <<< "$commit_files"
 
             if [ -z "$expected_scopes_csv" ]; then
-              add_commit_scope_bad "${commit_subject} -> used (${commit_scope}); recommendation: unscoped or non-release scope for these paths."
+              add_commit_scope_bad \
+                "${commit_subject} -> scope (${commit_scope}) does not map to changed paths." \
+                "Use an unscoped commit or a non-release scope for these paths."
               continue
             fi
 
@@ -228,7 +233,9 @@ jobs:
                 commit_scope_good=$((commit_scope_good + 1))
                 ;;
               *)
-                add_commit_scope_bad "${commit_subject} -> used (${commit_scope}); recommendation: (${expected_scopes_csv})."
+                add_commit_scope_bad \
+                  "${commit_subject} -> scope (${commit_scope}) does not match changed paths." \
+                  "Suggested scope(s): (${expected_scopes_csv})."
                 ;;
             esac
           done <<< "$COMMIT_SHAS"
@@ -243,48 +250,52 @@ jobs:
             mismatch_block="$mismatch_lines"
           fi
 
-          if [ "$commit_scope_bad" -eq 0 ]; then
+          if [ "$commit_scope_bad" -eq 0 ] && [ "$mismatch_count" -eq 0 ]; then
             commit_scope_status="All scoped commits match expected path scopes."
-            commit_scope_bad_block="None."
+            detail_mismatch_section=""
+            detail_recommendation_section=""
           else
-            commit_scope_status="Some scoped commits do not match expected path scopes."
-            commit_scope_bad_block="$commit_scope_bad_lines"
-          fi
+            commit_scope_status=""
 
-          if [ "$content_release_eligible" = true ]; then
-            content_status="Yes"
-          else
-            content_status="No"
-          fi
+            merged_mismatch_lines=""
+            if [ -n "$commit_scope_mismatch_lines" ]; then
+              merged_mismatch_lines+="$commit_scope_mismatch_lines"
+            fi
+            if [ -n "$mismatch_lines" ]; then
+              merged_mismatch_lines+="$mismatch_lines"
+            fi
 
-          if [ "$infra_release_eligible" = true ]; then
-            infra_status="Yes"
-          else
-            infra_status="No"
+            if [ -z "$merged_mismatch_lines" ]; then
+              merged_mismatch_lines="- None."
+            fi
+
+            if [ -n "$commit_scope_recommendation_lines" ]; then
+              recommendation_lines="$commit_scope_recommendation_lines"
+            else
+              recommendation_lines="- Suggested release scopes by path family: content, rules, cards, ci, site."
+            fi
+
+            detail_mismatch_section=$'\n### Path/Scope Mismatches\n'
+            detail_mismatch_section+="$merged_mismatch_lines"
+
+            detail_recommendation_section=$'\n### Path/Scope Recommendations\n'
+            detail_recommendation_section+="$recommendation_lines"
           fi
 
           summary_file="$(mktemp)"
           {
             echo "<!-- path-scope-advisory-comment -->"
-            echo "## Advisory Release Check"
+            echo "## Report Paths and Scopes"
             echo
-            echo "- Content release eligible: **${content_status}**"
-            echo "- Infra release eligible: **${infra_status}**"
-            echo "- Content scoped commits in this PR: **${content_scoped_commit_count}**"
-            echo "- Infra scoped commits in this PR: **${infra_scoped_commit_count}**"
+            echo "- Content release commits in this PR: **${content_release_count}**"
+            echo "- Infra release commits in this PR: **${infra_release_count}**"
             echo "- Unscoped commits in this PR: **${unscoped_commit_count}**"
-            echo "- [OK] Good scope/path matches: **${commit_scope_good}/${commit_scope_checked_total}**"
-            echo "- [X] Scope/path mismatches: **${commit_scope_bad}/${commit_scope_checked_total}**"
+            echo "- [checkmark] Scope/path matches: **${commit_scope_good}/${commit_scope_checked_total}**"
+            echo "- [cross] Scope/path mismatches: **${commit_scope_bad}/${commit_scope_checked_total}**"
             echo
             echo "$commit_scope_status"
-            echo
-            echo "### Scoped Commit Path/Scope Recommendations"
-            echo "$commit_scope_bad_block"
-            echo
-            echo "### Advisory Path/Scope Mismatches"
-            echo "$mismatch_block"
-            echo
-            echo "This check is informational only and does not block automerge."
+            printf '%b\n' "$detail_mismatch_section"
+            printf '%b\n' "$detail_recommendation_section"
           } > "$summary_file"
 
           {
