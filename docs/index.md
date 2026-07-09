@@ -12,8 +12,8 @@ Who will emerge the most glorious?
 
 <!-- VERSION_UPDATE_START -->
 
-Latest Version: v0.2.2  
-Last Updated: 2026-07-08
+Latest Version: v0.3.0  
+Last Updated: 2026-07-09
 
 <!-- VERSION_UPDATE_END -->
 
