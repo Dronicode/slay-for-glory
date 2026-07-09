@@ -63,25 +63,23 @@ jobs:
             invalid_block="$invalid_lines"
           fi
 
-          recommendation_block="- Preferred release-trigger combinations: feat(content), fix(content), feat(rules), fix(rules), feat(cards), fix(cards), feat(ci), fix(ci), feat(site), fix(site).\n- Other valid commit types are allowed, but may not trigger a release."
+          recommendation_block="- Release-trigger types: feat, fix.\n- Release-trigger scopes: content, rules, cards, ci, site.\n- Non-release types: chore, docs, refactor, test.\n- Non-release scopes: any scope outside release-trigger scopes, or unscoped."
 
           summary_file="$(mktemp)"
           {
             echo "<!-- commit-lint-advisory-comment -->"
-            echo "## Advisory Commit Conventions"
+            echo "## Report Commit Conventions"
             echo
-            echo "- [OK] Conventional format matches: **${valid_count}/${total_count}**"
-            echo "- [X] Conventional format mismatches: **${invalid_count}/${total_count}**"
+            echo "- [checkmark] Conventional syntax matches: **${valid_count}/${total_count}**"
+            echo "- [cross] Conventional syntax mismatches: **${invalid_count}/${total_count}**"
             echo
             echo "$status_line"
             echo
-            echo "### Mismatched Commit Subjects"
+            echo "### Unconventional Commit Subjects"
             echo "$invalid_block"
             echo
-            echo "### Recommended Combinations"
+            echo "### Recommended Conventional types and scopes"
             printf '%b\n' "$recommendation_block"
-            echo
-            echo "This report is informational only and does not block automerge."
           } > "$summary_file"
 
           {
