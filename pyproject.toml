@@ -1,6 +1,6 @@
 [project]
 name = "slay-for-glory"
-version = "0.2.1"
+version = "0.2.2"
 description = "Tabletop fantasy deck-building dungeon-crawler card game for 2-5 players."
 readme = "README.md"
 requires-python = ">=3.13"
