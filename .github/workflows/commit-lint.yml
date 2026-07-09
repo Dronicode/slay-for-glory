@@ -63,12 +63,12 @@ jobs:
             show_detail_sections=true
           fi
 
-          recommendation_block="- Release-trigger types: feat, fix.\n- Release-trigger scopes: content, rules, cards, ci, site.\n- Non-release types: chore, docs, refactor, test.\n- Non-release scopes: any scope outside release-trigger scopes, or unscoped."
+          recommendation_block="- Correct format: type(scope):\n- Release-trigger types: feat, fix.\n- Non-release types: chore, refactor, test.\n- Release-trigger scopes: content, rules, cards, ci, site.\n- Non-release scopes: any scope outside release-trigger scopes, or unscoped."
 
           summary_file="$(mktemp)"
           {
             echo "<!-- commit-lint-advisory-comment -->"
-            echo "## Report Commit Conventions"
+            echo "## Commit Conventions Report"
             echo
             echo "- ✅ Conventional syntax matches: **${valid_count}/${total_count}**"
             echo "- ❌ Conventional syntax mismatches: **${invalid_count}/${total_count}**"
@@ -80,7 +80,8 @@ jobs:
               echo "### Unconventional Commit Subjects"
               echo "$invalid_lines"
               echo
-              echo "### Recommended Conventional types and scopes"
+              echo "### Recommended Conventional Commit messages"
+              echo "- Correct format: type(scope):"
               printf '%b\n' "$recommendation_block"
             fi
           } > "$summary_file"
