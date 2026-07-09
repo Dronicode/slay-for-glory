@@ -124,15 +124,67 @@ jobs:
 
           add_mismatch_recommendation() {
             local message="$1"
-            mismatch_recommendation_lines+="- ${message}"$'\n'
+            if ! printf '%s\n' "$mismatch_recommendation_lines" | grep -Fqx -- "- ${message}"; then
+              mismatch_recommendation_lines+="- ${message}"$'\n'
+            fi
           }
 
           add_commit_scope_bad() {
             local mismatch_message="$1"
             local recommendation_message="$2"
             commit_scope_bad=$((commit_scope_bad + 1))
-            commit_scope_mismatch_lines+="- ${mismatch_message}"$'\n'
-            commit_scope_recommendation_lines+="- ${recommendation_message}"$'\n'
+            if ! printf '%s\n' "$commit_scope_mismatch_lines" | grep -Fqx -- "- ${mismatch_message}"; then
+              commit_scope_mismatch_lines+="- ${mismatch_message}"$'\n'
+            fi
+            if ! printf '%s\n' "$commit_scope_recommendation_lines" | grep -Fqx -- "- ${recommendation_message}"; then
+              commit_scope_recommendation_lines+="- ${recommendation_message}"$'\n'
+            fi
+          }
+
+          recommendation_path_for_file() {
+            local file="$1"
+
+            case "$file" in
+              .github/*)
+                echo ".github/*"
+                ;;
+              scripts/*)
+                echo "scripts/*"
+                ;;
+              .releaserc.*.cjs)
+                echo ".releaserc.*.cjs"
+                ;;
+              .commitlintrc.js)
+                echo ".commitlintrc.js"
+                ;;
+              .gitignore)
+                echo ".gitignore"
+                ;;
+              docs/cards/*)
+                echo "docs/cards/*"
+                ;;
+              docs/rules/*)
+                echo "docs/rules/*"
+                ;;
+              docs/assets/*)
+                echo "docs/assets/*"
+                ;;
+              docs/stylesheets/*)
+                echo "docs/stylesheets/*"
+                ;;
+              docs/javascripts/*)
+                echo "docs/javascripts/*"
+                ;;
+              docs/*)
+                echo "docs/*"
+                ;;
+              zensical.toml)
+                echo "zensical.toml"
+                ;;
+              *)
+                echo "$file"
+                ;;
+            esac
           }
 
           expected_scope_for_file() {
@@ -163,13 +215,18 @@ jobs:
           add_recommendations_for_missing_scope() {
             local scope="$1"
             local found=false
+            local seen_paths=""
 
             while IFS= read -r file; do
               [ -z "$file" ] && continue
 
               expected_scope="$(expected_scope_for_file "$file")"
               if [ "$expected_scope" = "$scope" ]; then
-                add_mismatch_recommendation "Changes in path ${file} should use scope (${scope})."
+                path_hint="$(recommendation_path_for_file "$file")"
+                if ! printf '%s\n' "$seen_paths" | grep -Fqx -- "$path_hint"; then
+                  seen_paths+="${path_hint}"$'\n'
+                  add_mismatch_recommendation "Changes in path ${path_hint} should use scope (${scope})."
+                fi
                 found=true
               fi
             done <<< "$CHANGED_FILES"
@@ -242,9 +299,11 @@ jobs:
                 continue
               fi
 
+              path_hint="$(recommendation_path_for_file "$file")"
+
               add_commit_scope_bad \
-                "Commit ${commit_subject} had changes in ${file}; changes in this path should use scope (${expected_scope})." \
-                "Changes in path ${file} should use scope (${expected_scope})."
+                "Commit ${commit_subject} had changes in ${path_hint}; changes in this path should use scope (${expected_scope})." \
+                "Changes in path ${path_hint} should use scope (${expected_scope})."
 
             done <<< "$commit_files"
           done <<< "$COMMIT_SHAS"
