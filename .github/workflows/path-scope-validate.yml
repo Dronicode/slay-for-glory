@@ -129,6 +129,31 @@ jobs:
             commit_scope_recommendation_lines+="- ${recommendation_message}"$'\n'
           }
 
+          expected_scope_for_file() {
+            local file="$1"
+
+            case "$file" in
+              docs/assets/*|docs/stylesheets/*|docs/javascripts/*|zensical.toml)
+                echo "site"
+                ;;
+              .github/*|scripts/*|.releaserc.*.cjs|.commitlintrc.js|.gitignore)
+                echo "ci"
+                ;;
+              docs/cards/*)
+                echo "cards"
+                ;;
+              docs/rules/*)
+                echo "rules"
+                ;;
+              docs/*)
+                echo "content"
+                ;;
+              *)
+                echo ""
+                ;;
+            esac
+          }
+
           if [ "$has_content_changes" = true ] && [ "$content_scope_count" -eq 0 ]; then
             add_mismatch "Content docs changed but no commits used (content) scope."
           fi
@@ -161,20 +186,6 @@ jobs:
             add_mismatch "Found (ci) commits but no automation files changed."
           fi
 
-          append_expected_scope() {
-            local scope="$1"
-            case ",$expected_scopes_csv," in
-              *",${scope},"*) ;;
-              *)
-                if [ -z "$expected_scopes_csv" ]; then
-                  expected_scopes_csv="$scope"
-                else
-                  expected_scopes_csv="${expected_scopes_csv},${scope}"
-                fi
-                ;;
-            esac
-          }
-
           COMMIT_SHAS="$(git log --no-merges --format=%H "$BASE_SHA..$HEAD_SHA")"
 
           while IFS= read -r commit_sha; do
@@ -187,57 +198,25 @@ jobs:
             [ -z "$commit_scope" ] && continue
 
             commit_scope_checked_total=$((commit_scope_checked_total + 1))
-            expected_scopes_csv=""
 
             commit_files="$(git diff-tree --no-commit-id --name-only -r "$commit_sha")"
 
             while IFS= read -r file; do
               [ -z "$file" ] && continue
 
-              if [[ "$file" == docs/assets/* ]] || [[ "$file" == docs/stylesheets/* ]] || [[ "$file" == docs/javascripts/* ]] || [[ "$file" == zensical.toml ]]; then
-                append_expected_scope "site"
+              expected_scope="$(expected_scope_for_file "$file")"
+              [ -z "$expected_scope" ] && continue
+
+              if [ "$commit_scope" = "$expected_scope" ]; then
+                commit_scope_good=$((commit_scope_good + 1))
                 continue
               fi
 
-              if [[ "$file" == .github/* ]] || [[ "$file" == scripts/* ]] || [[ "$file" == .releaserc.*.cjs ]] || [[ "$file" == .commitlintrc.js ]] || [[ "$file" == .gitignore ]]; then
-                append_expected_scope "ci"
-                continue
-              fi
-
-              if [[ "$file" == docs/cards/* ]]; then
-                append_expected_scope "cards"
-                continue
-              fi
-
-              if [[ "$file" == docs/rules/* ]]; then
-                append_expected_scope "rules"
-                continue
-              fi
-
-              if [[ "$file" == docs/* ]]; then
-                append_expected_scope "content"
-                continue
-              fi
+              add_commit_scope_bad \
+                "Commit ${commit_subject} had changes in ${file}; changes in this path should use scope (${expected_scope})." \
+                "Changes in path ${file} should use scope (${expected_scope})."
 
             done <<< "$commit_files"
-
-            if [ -z "$expected_scopes_csv" ]; then
-              add_commit_scope_bad \
-                "${commit_subject} -> scope (${commit_scope}) does not map to changed paths." \
-                "Use an unscoped commit or a non-release scope for these paths."
-              continue
-            fi
-
-            case ",$expected_scopes_csv," in
-              *",${commit_scope},"*)
-                commit_scope_good=$((commit_scope_good + 1))
-                ;;
-              *)
-                add_commit_scope_bad \
-                  "${commit_subject} -> scope (${commit_scope}) does not match changed paths." \
-                  "Suggested scope(s): (${expected_scopes_csv})."
-                ;;
-            esac
           done <<< "$COMMIT_SHAS"
 
           total_commit_count=$(echo "$COMMIT_SUBJECTS" | sed '/^\s*$/d' | wc -l | tr -d ' ')
@@ -269,11 +248,7 @@ jobs:
               merged_mismatch_lines="- None."
             fi
 
-            if [ -n "$commit_scope_recommendation_lines" ]; then
-              recommendation_lines="$commit_scope_recommendation_lines"
-            else
-              recommendation_lines="- Suggested release scopes by path family: content, rules, cards, ci, site."
-            fi
+            recommendation_lines="$commit_scope_recommendation_lines"
 
             detail_mismatch_section=$'\n### Path/Scope Mismatches\n'
             detail_mismatch_section+="$merged_mismatch_lines"
