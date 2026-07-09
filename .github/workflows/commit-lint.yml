@@ -47,7 +47,7 @@ jobs:
           while IFS= read -r subject; do
             [ -z "$subject" ] && continue
 
-            if echo "$subject" | grep -Eq '^(feat|fix|docs|chore|refactor|test)(\([^)]+\))?!?: .+'; then
+            if echo "$subject" | grep -Eq '^(feat|fix|docs|chore|refactor|test)\([^)]+\)!?: .+'; then
               valid_count=$((valid_count + 1))
             else
               invalid_count=$((invalid_count + 1))
@@ -57,10 +57,10 @@ jobs:
 
           if [ "$invalid_count" -eq 0 ]; then
             status_line="All commit subjects follow preferred Conventional Commit practice."
-            invalid_block="None."
+            show_detail_sections=false
           else
             status_line="Some commit subjects do not match preferred Conventional Commit practice."
-            invalid_block="$invalid_lines"
+            show_detail_sections=true
           fi
 
           recommendation_block="- Release-trigger types: feat, fix.\n- Release-trigger scopes: content, rules, cards, ci, site.\n- Non-release types: chore, docs, refactor, test.\n- Non-release scopes: any scope outside release-trigger scopes, or unscoped."
@@ -70,16 +70,19 @@ jobs:
             echo "<!-- commit-lint-advisory-comment -->"
             echo "## Report Commit Conventions"
             echo
-            echo "- [checkmark] Conventional syntax matches: **${valid_count}/${total_count}**"
-            echo "- [cross] Conventional syntax mismatches: **${invalid_count}/${total_count}**"
+            echo "- ✅ Conventional syntax matches: **${valid_count}/${total_count}**"
+            echo "- ❌ Conventional syntax mismatches: **${invalid_count}/${total_count}**"
             echo
             echo "$status_line"
-            echo
-            echo "### Unconventional Commit Subjects"
-            echo "$invalid_block"
-            echo
-            echo "### Recommended Conventional types and scopes"
-            printf '%b\n' "$recommendation_block"
+
+            if [ "$show_detail_sections" = true ]; then
+              echo
+              echo "### Unconventional Commit Subjects"
+              echo "$invalid_lines"
+              echo
+              echo "### Recommended Conventional types and scopes"
+              printf '%b\n' "$recommendation_block"
+            fi
           } > "$summary_file"
 
           {
