@@ -81,7 +81,6 @@ jobs:
               echo "$invalid_lines"
               echo
               echo "### Recommended Conventional Commit messages"
-              echo "- Correct format: type(scope):"
               printf '%b\n' "$recommendation_block"
             fi
           } > "$summary_file"
