@@ -285,12 +285,11 @@ jobs:
           summary_file="$(mktemp)"
           {
             echo "<!-- path-scope-advisory-comment -->"
-            echo "## Report Paths and Scopes"
+            echo "## Paths and Scopes Report"
             echo
             echo "- Content release commits in this PR: **${content_release_count}**"
             echo "- Infra release commits in this PR: **${infra_release_count}**"
             echo "- Unscoped commits in this PR: **${unscoped_commit_count}**"
-            echo
             echo "- ✅ Scope/path matches: **${commit_scope_good}/${commit_scope_checked_total}**"
             echo "- ❌ Scope/path mismatches: **${commit_scope_bad}/${commit_scope_checked_total}**"
             echo
