@@ -1,8 +1,11 @@
 # Infra Changelog
 
-## [0.2.2](https://github.com/Dronicode/slay-for-glory/compare/infra-v0.2.1...infra-v0.2.2) (2026-07-09)
+## [0.2.3](https://github.com/Dronicode/slay-for-glory/compare/infra-v0.2.2...infra-v0.2.3) (2026-07-09)
 
 # Infra Changelog
+
+## [0.2.2](https://github.com/Dronicode/slay-for-glory/compare/infra-v0.2.1...infra-v0.2.2) (2026-07-09)
+
 
 ## [0.2.1](https://github.com/Dronicode/slay-for-glory/compare/infra-v0.2.0...infra-v0.2.1) (2026-07-09)
 
